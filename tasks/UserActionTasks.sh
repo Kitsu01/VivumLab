@@ -30,8 +30,9 @@ Task::reboot(){
   : @desc "Reboots the VivumLab deploy server"
   : @param t "Time (minutes) until server reboots"
 
-  ssh -t -i "$HOME/.ssh/$(pwless_sshkey)" "$(vlab_ssh_user)@$(vlab_ip)" -p "$(vlab_port)" \
-  "sudo shutdown -r +"$(countdown)|| colorize light_red "error: reboot"
+  ssh -t -p "$(vlab_port)" -i "$HOME/.ssh/$(pwless_sshkey)" \
+  "$(vlab_ssh_user)@$(vlab_ip)" "sudo shutdown -r +"$(countdown) \
+  || colorize light_red "error: reboot"
 }
 
 # Shuts down the server. Has the option for a timer (in minutes)
@@ -39,8 +40,9 @@ Task::shutdown(){
   : @desc "Shuts down the VivumLab deploy server"
   : @param t "Sets a countdown (minutes) until server shuts down"
 
-  ssh -t -i "$HOME/.ssh/$(pwless_sshkey)" "$(vlab_ssh_user)@$(vlab_ip)" -p "$(vlab_port)" \
-  "sudo shutdown -h +"$(countdown) || colorize light_red "error: shutdown"
+  ssh -t -p "$(vlab_port)" -i "$HOME/.ssh/$(pwless_sshkey)" \
+  "$(vlab_ssh_user)@$(vlab_ip)" "sudo shutdown+"$(countdown) \
+  || colorize light_red "error: shutdown"
 }
 
 # Allows the user to make edits to a service without changing the base docker-compose file
@@ -49,10 +51,9 @@ Task::service_edit() {
   : @param service "Service Name"
   : @param config_dir="settings"
   : @param debug true "Debugs ansible-playbook commands"
-  : @param user_config="prod" "Prefix of the user-cloned config files"
 
   Task::run_docker ansible-playbook $(debug_check) \
-  --extra-vars="@$_config_dir/$_user_config-config.yml" --extra-vars="@$_config_dir/$_user_config-vault.yml" \
+  --extra-vars="@$_config_dir/config.yml" --extra-vars="@$_config_dir/vault.yml" \
   -i inventory playbook.service-edit.yml || colorize light_red "error: service_edit"
 }
 
@@ -77,30 +78,16 @@ Task::copy_sshkey() {
   : @desc "Allows user to copy an existing ssh key"
 
   echo "Copying keys over to the machine, located at $(vlab_ip)"
-  ssh-copy-id -i "$HOME/.ssh/$(pwless_sshkey).pub" "$(vlab_ssh_user)@$(vlab_ip)" -p "$(vlab_port)" || colorize light_red "error: create_sshkey: copying keys"
+  ssh-copy-id -p "$(vlab_port)" -i "$HOME/.ssh/$(pwless_sshkey).pub" \
+  "$(vlab_ssh_user)@$(vlab_ip)" || colorize light_red "error: create_sshkey: copying keys"
 }
+
 
 Task::setup_sshkey() {
   : @desc "Creates and copies a non-existing SSH key"
 
   Task::create_sshkey
   Task::copy_sshkey
-}
-
-Task::clone_config() {
-  : @desc "Clones the VivumLab config in its current state"
-  : @param config_dir="settings"
-  : @param user_config="prod" "Prefix of the user-cloned config files"
-
-  read -p "What would you like to prefix the new files with? " clone_config_prefix
-  printf "cloning configs"
-
-  Task::decrypt
-  cp $_config_dir/prod-config.yml $_config_dir/${clone_config_prefix}-config.yml
-  cp $_config_dir/prod-vault.yml $_config_dir/${clone_config_prefix}-vault.yml
-  cp tasks/prod-ansible_bash.vars tasks/${clone_config_prefix}-ansible_bash.vars
-  "Task::encrypt user_config=${clone_config_prefix}"
-
 }
 
 # Provides the user with a terminal rendered 'contact us' doc
